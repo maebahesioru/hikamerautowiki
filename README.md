@@ -73,6 +73,10 @@ pnpm build
 pnpm start
 ```
 
+## Issue と Pull Request
+
+バグ報告・機能要望・修正の送り方は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。Pull Request では [GitHub Actions の CI](.github/workflows/ci.yml)（`pnpm lint` / `pnpm test` / `pnpm build`）が実行されます。PR 作成時はテンプレートに沿って概要と確認内容を書けます。
+
 ## 補足
 
 - ツイート取得の API 仕様メモはリポジトリ内 `yahoo-realtime-api.md` を参照。  
