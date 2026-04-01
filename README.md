@@ -1,5 +1,7 @@
 # ヒカマーwiki 自動編集アシスタント
 
+**ソースコード:** [github.com/maebahesioru/hikamerautowiki](https://github.com/maebahesioru/hikamerautowiki)
+
 [ヒカマーwiki](https://hikamers.net/wiki/) の記事を、人の指示と **Yahoo リアルタイム検索**および（任意で）**PostgreSQL の `tweets` テーブル**から取ったツイートを踏まえて AI が wikitext を生成・投稿するためのツールです。
 
 ## 技術スタック
@@ -55,7 +57,7 @@
 - **任意（DB ツイート）:** `DATABASE_URL`（未設定なら DB はスキップ）  
 - **任意:** `HIKAMER_TOTAL_TWEET_LIMIT`（Yahoo+DB マージ後の合計上限、既定 10000）
 - **任意:** `HIKAMER_SEARCH_CONCURRENCY`（検索クエリの同時実行数、既定 2。リモート DB が遅いときは 1 に下げる）
-- **任意（SEO）:** `NEXT_PUBLIC_SITE_URL`（本番のサイト origin。OG・canonical・`sitemap.xml` / `robots.txt` の絶対 URL に使う。未設定時はビルド時に `http://localhost:3000` が使われる）
+- **任意（SEO）:** `NEXT_PUBLIC_SITE_URL`（デプロイ先のサイト origin。OG・canonical・`sitemap.xml` / `robots.txt` の絶対 URL。未設定時はビルド時に `http://localhost:3000` が使われる）
 
 ## 開発
 
@@ -76,3 +78,7 @@ pnpm start
 - ツイート取得の API 仕様メモはリポジトリ内 `yahoo-realtime-api.md` を参照。  
 - AI のモデル優先順・互換 API の挙動は `src/lib/openaiCompat.ts` を参照。  
 - DB 検索の実装は `src/lib/tweetsDb.ts` を参照。
+
+## ライセンス
+
+[MIT License](LICENSE)（著作表示と同梱条件あり）。`package.json` の `license` フィールドとも一致しています。
