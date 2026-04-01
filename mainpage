@@ -1,0 +1,61 @@
+<div style="text-align: center; padding: 30px 20px; background: #f8f9fa; border: 1px solid #a2a9b1; border-radius: 4px; margin-bottom: 20px;">
+<span style="font-size: 180%; font-weight: bold; color: #000000; display: block; margin-bottom: 10px; border-bottom: 1px solid #a2a9b1; padding-bottom: 10px; margin-left: 20%; margin-right: 20%;">ヒカマーwikiへようこそ</span>
+<div style="font-size: 110%; color: #202122;">
+このWikiはヒカマー界隈に関する情報を集積する為に2026年3月に[https://krsw-wiki.in/wiki/?curid=2453 防弾ホスティング]の[https://flokinet.is/ '''FlokiNET''']で設立された百科事典です。<br>
+現在、合計 <span style="font-size: 120%; font-weight: bold;">{{NUMBEROFARTICLES}}</span> 件の記事が作成されています。<br>
+編集する前に[[ヒカマーwiki:ヒカマーwikiについて]]を読みましょう！って言いたいじゃないですか
+</div>
+</div>
+<br>
+<inputbox>
+type=search
+break=no
+</inputbox>
+
+
+{| style="width: 100%; border-spacing: 15px 0; margin: 0 -15px;"
+| style="width: 50%; vertical-align: top; background: #ffffff; border: 1px solid #a2a9b1; border-top: 3px solid #3366cc; padding: 20px;" |
+<span style="font-size: 120%; font-weight: bold; color: #000000; display: block; margin-bottom: 15px; border-bottom: 1px solid #eaecf0;">ナビゲーション</span>
+Wiki内の記事を探すための主要なリンクです。
+* [[ヒカマー史]]
+* [[ヒカマー一覧]]
+* [[Special:AllPages|すべてのページ]]
+* [[Special:Categories|カテゴリ一覧]]
+
+| style="width: 50%; vertical-align: top; background: #ffffff; border: 1px solid #a2a9b1; border-top: 3px solid #00af89; padding: 20px;" |
+<span style="font-size: 120%; font-weight: bold; color: #000000; display: block; margin-bottom: 15px; border-bottom: 1px solid #eaecf0;">コミュニティ</span>
+最新の編集状況や活動の記録です。
+* [[Special:RecentChanges|最近の更新]]
+* [[Special:NewPages|新しいページ]]
+* [[Special:Log|操作ログ一覧]]
+* [[特別:ファイル一覧|新しいファイル]]
+|}
+
+
+<div style="background: #ffffff; border: 1px solid #a2a9b1; border-top: 3px solid #14866d; padding: 20px; margin: 15px 0;">
+<span style="font-size: 120%; font-weight: bold; color: #000000; display: block; margin-bottom: 12px; border-bottom: 1px solid #eaecf0; padding-bottom: 8px;">ヒカマーwiki 自動編集アシスタント</span>
+<div style="font-size: 100%; color: #202122; line-height: 1.6;">
+別サイトで動く'''Webアプリ'''で、[[ヒカマーwiki]]の記事を'''ページ名'''と'''指示'''（追記・修正の内容）から、'''AI'''が wikitext を書いて'''ボットアカウント'''でそのまま反映できるやつです（手元のブラウザから操作）。<br>
+'''ざっくり流れ'''は「対象ページを決める → 指示を書く → サーバーが Yahoo リアルタイム検索などでツイートを集めて（設定があれば DB のツイートも）→ AI が記事案を出す → OK なら Wiki に投稿」って感じ。<br>
+'''モード'''の例:
+* '''記事を編集''' — 検索でページを選んで、追記・修正の指示どおりに更新
+* '''新規記事''' — まだ本文がないタイトル向け。'''人物'''を選ぶと <code>ヒカマーwiki:チラシの裏/ページ名</code> の形で作る（上書きはしない）
+* '''ファクトチェック''' — Wiki には書き込まず、記事の検証結果だけ表示
+* '''リダイレクト''' — 移動元・移動先を指定してリダイレクトページを作る
+利用 URL や細かい仕様は運営・[[ヒカマーwiki:自動編集アシスタント|案内ページ]]（あれば）を見てね。環境変数で API キーや Wiki の Bot 用アカウントをサーバー側に設定するタイプのツールだから、'''個人の PC から MediaWiki に直結するわけではない'''よ。
+</div>
+</div>
+
+　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　議論・質問は[[ヒカマーWiki:フォーラム|'''こちら''']]で受け付けています。
+
+<h2>記事投稿、編集の仕方</h2>　
+[[ファイル:OGW.jpeg|left|140px|thumb|[[ラーメン刑事]]曰く、]]
+新しいページの作成は、メインページ中央の欄にタイトルを入力するか、右上にある検索バーにタイトルを入力してね。<br>
+編集は、上の[編集]をクリックしてね。<br>
+更新された履歴を見るには、上の[履歴表示]をクリックしてください。 <br>
+[[特別:登録利用者一覧|アカウント]]に関しては[[特別:アカウント作成|作った]]ほうが色々と都合が良い。<br>
+ファイルをアップロードするには、アカウントを作成してログイン後、左メニュー「ツール」の「ファイルをアップロード」を選んでください、はい。<br>
+詳しい編集の仕方は{{wpl|Help:ページの編集|Wikipediaの編集の仕方が載ってるページ}}を参考にしてね。<br />だってマークアップとかほぼ同じだし<br />それは同じ[[mw:MediaWiki/ja|MediaWiki]]とかいうWikiを使ってるからでしょ、ふざけないで<br>
+荒らしは本当に恥ずかしい、恥ずかしい行為だからやめようね！
+
+[[カテゴリ:ヒカマーwiki]]
