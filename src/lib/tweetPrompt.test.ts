@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   embedTwimgBracketLinksAsImg,
   expandMediaRefsInWikitext,
+  expandTweetRefsInWikitext,
   fixMisusedFileNamespaceForExternalUrls,
 } from "@/lib/tweetPrompt";
 
@@ -29,6 +30,55 @@ describe("expandMediaRefsInWikitext", () => {
 
   it("leaves unknown refs", () => {
     expect(expandMediaRefsInWikitext("| image = M9", map)).toBe("| image = M9");
+  });
+});
+
+describe("expandTweetRefsInWikitext", () => {
+  const mw1 = "[https://x.com/i/status/111 ツイート]";
+  const mw2 = "[https://x.com/i/status/222 ツイート]";
+  const map = new Map([
+    ["T1", "111"],
+    ["T2", "222"],
+  ]);
+
+  it("replaces [tweet:Tn] with MediaWiki external link", () => {
+    expect(expandTweetRefsInWikitext(`x [tweet:T1] y`, map)).toBe(`x ${mw1} y`);
+  });
+
+  it("replaces bare tweet:Tn with MediaWiki external link", () => {
+    expect(expandTweetRefsInWikitext("出典 tweet:T2", map)).toBe(`出典 ${mw2}`);
+  });
+
+  it("replaces compact t:Tn with MediaWiki external link", () => {
+    expect(expandTweetRefsInWikitext("x t:T1 y", map)).toBe(`x ${mw1} y`);
+  });
+
+  it("leaves unknown T refs", () => {
+    expect(expandTweetRefsInWikitext("[tweet:T9]", map)).toBe("[tweet:T9]");
+  });
+
+  it("normalizes tweet:numeric id to labeled link without T map", () => {
+    expect(expandTweetRefsInWikitext("x tweet:1952670718006841843 y", new Map())).toBe(
+      "x [https://x.com/i/status/1952670718006841843 ツイート] y"
+    );
+  });
+
+  it("normalizes [tweet:https://…status/…] to canonical URL + label", () => {
+    expect(
+      expandTweetRefsInWikitext(
+        "[tweet:https://twitter.com/foo/status/1952670718006841843]",
+        new Map()
+      )
+    ).toBe("[https://x.com/i/status/1952670718006841843 ツイート]");
+  });
+
+  it("fixes <https://… without closing > to MediaWiki link", () => {
+    expect(
+      expandTweetRefsInWikitext(
+        "<https://x.com/i/web/status/2037355865062449518。 千葉",
+        new Map()
+      )
+    ).toBe("[https://x.com/i/status/2037355865062449518 ツイート]。 千葉");
   });
 });
 

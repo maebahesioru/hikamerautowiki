@@ -18,7 +18,7 @@
    - MediaWiki API で対象ページの **現在の wikitext を取得**（匿名・閲覧可能な記事のみ想定）。  
    - 検索クエリが空なら **AI がクエリを推測**（詳細は下記「空欄時の検索クエリ推測」）。  
    - **検索の並列度**: ページ名の Wiki 検索は 1 本。各ツイート検索クエリは **`HIKAMER_SEARCH_CONCURRENCY`（既定 2）** 件ずつバッチ処理し、バッチ内では各クエリごとに **DB / Wiki 内検索 / Yahoo** を同時に呼ぶ（以前はクエリを全部同時に走らせて Postgres の接続タイムアウトや `fetch failed` が出やすかった）。**マージ時の優先度**（同一ツイート ID）は **DB → Yahoo**。Wiki は関連ページスニペット用でツイートとは別。  
-   - **`DATABASE_URL` があれば**、別系統の **Postgres `tweets` テーブル**（`新しいフォルダー` と同じ想定）からも同じ検索クエリで取得（**古い順**、件数は合計上限の範囲内）。**Yahoo リアルタイム検索 API**（`start` 並列・最大 10000 件相当）でもツイートを取得。**ツイート ID が重複する場合は DB を優先してマージ**し、**DB + Yahoo 合わせて最大 10000 件**（`HIKAMER_TOTAL_TWEET_LIMIT`）に切り詰め。期間を付けたときは、API の `since` / `until`（Unix 秒）と DB の `created_at` の両方で絞り込む（`src/lib/tweetSearchDateRange.ts`）。  
+   - **`DATABASE_URL` があれば**、別系統の **Postgres `tweets` テーブル**（`新しいフォルダー` と同じ想定）からも同じ検索クエリで取得（**古い順**、件数は合計上限の範囲内）。**Yahoo リアルタイム検索 API**（`start` 並列・最大 10000 件相当）でもツイートを取得。**ツイート ID が重複する場合は DB を優先してマージ**し、**DB + Yahoo 合わせて最大 6000 件**（既定の `HIKAMER_TOTAL_TWEET_LIMIT`）に切り詰め。期間を付けたときは、API の `since` / `until`（Unix 秒）と DB の `created_at` の両方で絞り込む（`src/lib/tweetSearchDateRange.ts`）。  
    - **OpenAI 互換 API** で、指示・既存記事・ツイートを踏まえて編集内容を生成（全文再出力か部分パッチかは **AI が 1 回の JSON 応答で選ぶ**。下記「全文と部分（パッチ）」）。  
    - **反映**のときだけ **MediaWiki API にログイン**し、**`action=edit` の `text` にページ全文**を渡して更新する（API 上は常に本文の置換）。
 
@@ -55,7 +55,7 @@
 - **反映時のみ:** `WIKI_USERNAME` / `WIKI_PASSWORD`  
 - **任意:** Yahoo 用 `YAHOO_REALTIME_USER_AGENT` / `YAHOO_REALTIME_REFERER`、モデル固定 `OPENAI_MODEL`  
 - **任意（DB ツイート）:** `DATABASE_URL`（未設定なら DB はスキップ）  
-- **任意:** `HIKAMER_TOTAL_TWEET_LIMIT`（Yahoo+DB マージ後の合計上限、既定 10000）
+- **任意:** `HIKAMER_TOTAL_TWEET_LIMIT`（Yahoo+DB マージ後の合計上限、既定 6000）
 - **任意:** `HIKAMER_SEARCH_CONCURRENCY`（検索クエリの同時実行数、既定 2。リモート DB が遅いときは 1 に下げる）
 - **任意（SEO）:** `NEXT_PUBLIC_SITE_URL`（デプロイ先のサイト origin。OG・canonical・`sitemap.xml` / `robots.txt` の絶対 URL。未設定時はビルド時に `http://localhost:3000` が使われる）
 

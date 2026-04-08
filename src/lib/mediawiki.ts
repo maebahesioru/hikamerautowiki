@@ -1,4 +1,5 @@
 import { cookieHeader, mergeSetCookieHeaders } from "@/lib/cookies";
+import { mapPool } from "@/lib/concurrency";
 import {
   fetchWithRetry,
   humanizeHttpError,
@@ -24,6 +25,8 @@ function joinApiUrl(apiUrl: string, query: Record<string, string>): string {
 export type WikiSearchHit = {
   title: string;
   snippet?: string;
+  /** `enrichWikiSearchHitsWithWikitext` 後: 閲覧可能な記事の wikitext 全文 */
+  wikitext?: string;
 };
 
 /** タイトル単位でマージ（先に入ったヒットを優先） */
@@ -601,6 +604,29 @@ export async function fetchWikiWikitextPublic(
     wikitext,
     missing: false,
   };
+}
+
+/**
+ * Wiki 内検索ヒットごとに本文（wikitext）を取得して付与する（ログイン不要・閲覧可能なページのみ）。
+ */
+export async function enrichWikiSearchHitsWithWikitext(
+  apiUrl: string,
+  hits: WikiSearchHit[],
+  opts?: { concurrency?: number }
+): Promise<WikiSearchHit[]> {
+  if (hits.length === 0) return [];
+  const conc = Math.max(1, Math.min(opts?.concurrency ?? 4, 8));
+  return mapPool(hits, conc, async (h) => {
+    try {
+      const rev = await fetchWikiWikitextPublic(apiUrl, h.title);
+      if (rev.missing) {
+        return { title: h.title, snippet: h.snippet, wikitext: "" };
+      }
+      return { title: h.title, snippet: h.snippet, wikitext: rev.wikitext };
+    } catch {
+      return { title: h.title, snippet: h.snippet };
+    }
+  });
 }
 
 export async function fetchWikiWikitext(

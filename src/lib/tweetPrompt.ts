@@ -32,6 +32,61 @@ function formatPromptDateTime(raw: string | undefined): string | undefined {
   }).format(d);
 }
 
+/** 曜日なし・YY/MM/DD HH:mm・スラッシュ区切り（トークン節約） */
+function formatPromptDateTimeCompact(raw: string | undefined): string | undefined {
+  if (raw == null) return undefined;
+  const s = String(raw).trim();
+  if (!s) return undefined;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  const t = d.toLocaleString("sv-SE", {
+    timeZone: "Asia/Tokyo",
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return t.replace(/^(\d{2})-(\d{2})-(\d{2})/, "$1/$2/$3");
+}
+
+/** アカウント作成日 `c:` 用。時刻なし・YY/MM/DD（Asia/Tokyo） */
+function formatPromptDateCompact(raw: string | undefined): string | undefined {
+  if (raw == null) return undefined;
+  const s = String(raw).trim();
+  if (!s) return undefined;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  const t = d.toLocaleString("sv-SE", {
+    timeZone: "Asia/Tokyo",
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return t.replace(/^(\d{2})-(\d{2})-(\d{2})/, "$1/$2/$3");
+}
+
+/** `HIKAMER_TWEET_PROMPT_VERBOSE=1` で従来の日本語ラベル・長いヘッダーに戻す */
+export function isTweetPromptVerbose(): boolean {
+  return process.env.HIKAMER_TWEET_PROMPT_VERBOSE?.trim() === "1";
+}
+
+/** エンゲージメントを英字+数値トークンをスペース区切り（R=reply T=RT Q=quote L=like V=view B=bookmark）。0 は出さない */
+function formatEngagementCompact(t: TweetHit): string {
+  const seg: string[] = [];
+  const push = (letter: string, v: number | undefined) => {
+    if (v != null && v !== 0) seg.push(`${letter}${v}`);
+  };
+  push("R", num(t.replyCount));
+  push("T", num(t.rtCount));
+  push("Q", num(t.qtCount));
+  push("L", num(t.likesCount));
+  push("V", num(t.viewCount));
+  push("B", num(t.bookmarkCount));
+  return seg.join(" ");
+}
+
 /** user_id が無いときの重複排除キー（Yahoo 等） */
 function accountKey(t: TweetHit): string {
   const id = t.authorId?.trim();
@@ -39,6 +94,42 @@ function accountKey(t: TweetHit): string {
   const n = t.displayName?.trim();
   if (n) return `name:${n}`;
   return `tweet:${t.id}`;
+}
+
+/** 投稿者の screen_name（小文字）→ aN（同一バッチ内のツイートから） */
+function buildHandleToAcctId(
+  tweets: TweetHit[],
+  keyToAcct: Map<string, string>
+): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const t of tweets) {
+    const sn = t.authorScreenName?.trim();
+    if (!sn) continue;
+    const acct = keyToAcct.get(accountKey(t));
+    if (acct) m.set(sn.toLowerCase(), acct);
+  }
+  return m;
+}
+
+/** in_reply の screen_name を aN に解決。無理なら undefined（従来の @ 表記へ） */
+function resolveReplyToAcctId(
+  inReplyTo: string | undefined,
+  handleToAcct: Map<string, string>,
+  tweets: TweetHit[],
+  keyToAcct: Map<string, string>
+): string | undefined {
+  const rp = inReplyTo?.trim();
+  if (!rp) return undefined;
+  const rpLower = rp.toLowerCase();
+  const byHandle = handleToAcct.get(rpLower);
+  if (byHandle) return byHandle;
+  for (const tw of tweets) {
+    const dn = tw.displayName?.trim();
+    if (dn && dn.toLowerCase() === rpLower) {
+      return keyToAcct.get(accountKey(tw));
+    }
+  }
+  return undefined;
 }
 
 /** 画像 URL はプロンプトに出さず、参照番号 M1/M2… のみ割り当てる（トークン節約）。番号→URL は保存前に展開用に保持 */
@@ -62,6 +153,8 @@ export type TweetPromptParts = {
   prompt: string;
   /** M1 等 → 画像 URL（compose 後の wikitext で `| image = M1` 等を URL に置換する） */
   mediaRefToUrl: ReadonlyMap<string, string>;
+  /** T1 等 → 実ツイート id（compose 後の wikitext で `t:T1` / `[tweet:T1]` 等を X のステータス URL に置換） */
+  tweetRefToId: ReadonlyMap<string, string>;
 };
 
 /**
@@ -88,6 +181,106 @@ export function expandMediaRefsInWikitext(
     return `| image = ${url}`;
   });
 
+  return out;
+}
+
+const TWEET_LINK_LABEL = "ツイート";
+
+/** X の投稿 URL（`/i/web/` は使わず `i/status` の短い形式） */
+export function tweetIdToXStatusUrl(id: string): string {
+  return `https://x.com/i/status/${id}`;
+}
+
+/** MediaWiki の外部リンク `[URL ラベル]`（URL 裸出しを避ける） */
+function mediaWikiTweetLinkFromId(id: string): string {
+  return `[${tweetIdToXStatusUrl(id)} ${TWEET_LINK_LABEL}]`;
+}
+
+/**
+ * x.com / twitter.com のツイート URL から数値ステータス id を取り出す。
+ */
+export function extractTweetIdFromXUrl(url: string): string | null {
+  const s = url.trim();
+  const m =
+    s.match(/\/i\/web\/status\/(\d{3,22})\b/i) ??
+    s.match(/\/i\/status\/(\d{3,22})\b/i) ??
+    s.match(
+      /(?:twitter\.com|x\.com)\/[^/\s]+\/status\/(\d{3,22})(?:[\s\]?#&]|$)/i
+    ) ??
+    s.match(/\/status\/(\d{3,22})(?:[\s\]?#&]|$)/i);
+  return m?.[1] ?? null;
+}
+
+/**
+ * `<https://...` のように `<` だけ付き `>` で閉じていない URL を外部リンク記法に直す。
+ */
+function fixStrayAngleBracketOpenUrls(wikitext: string): string {
+  return wikitext.replace(
+    /<(?=https?:\/\/)(https?:\/\/[^\s<。、]+)/g,
+    (full, url: string) => {
+      const id = extractTweetIdFromXUrl(url);
+      if (id != null) return mediaWikiTweetLinkFromId(id);
+      return `[${url.trim()} ${TWEET_LINK_LABEL}]`;
+    }
+  );
+}
+
+/**
+ * `tweet:数値` / `tweet:https://…` を X のステータス URL に揃える（マップ不要）。
+ */
+function normalizeBareTweetIdsAndUrlsToXStatusUrl(wikitext: string): string {
+  let out = wikitext;
+  out = out.replace(/\[tweet:(https?:\/\/[^\]]+)\]/gi, (full, url: string) => {
+    const id = extractTweetIdFromXUrl(url);
+    return id != null ? mediaWikiTweetLinkFromId(id) : full;
+  });
+  out = out.replace(/\btweet:(https?:\/\/[^\s\])]+)/gi, (full, url: string) => {
+    const id = extractTweetIdFromXUrl(url);
+    return id != null ? mediaWikiTweetLinkFromId(id) : full;
+  });
+  out = out.replace(/\[tweet:(\d{3,22})\]/g, (full, id: string) => {
+    return mediaWikiTweetLinkFromId(id);
+  });
+  out = out.replace(/\btweet:(\d{3,22})\b/g, (full, id: string) => {
+    return mediaWikiTweetLinkFromId(id);
+  });
+  return out;
+}
+
+/**
+ * AI が出力した wikitext 内のツイート参照を、保存前に X のステータス URL へ置換する。
+ * - `[tweet:T1]` / `tweet:T1` / `t:T1` → 実 id が分かれば `[https://x.com/i/status/{id} ツイート]`（MediaWiki 外部リンク）
+ * - `[tweet:数値ID]` / `tweet:数値ID` および URL 直書き → 同形式に正規化（`/i/web/` は使わない）
+ * - `<https://…` のように閉じ `>` のない URL は同じく外部リンク記法へ
+ * マップに無い `T9` 等はそのまま残し、その後も数値・URL だけ正規化する。
+ */
+export function expandTweetRefsInWikitext(
+  wikitext: string,
+  tweetRefToId: ReadonlyMap<string, string>
+): string {
+  if (!wikitext) return wikitext;
+  const apply = (ref: string) => tweetRefToId.get(ref);
+
+  let out = wikitext;
+  if (tweetRefToId.size > 0) {
+    out = out.replace(/\[tweet:(T\d+)\]/gi, (full, ref: string) => {
+      const id = apply(ref);
+      return id != null ? mediaWikiTweetLinkFromId(id) : full;
+    });
+
+    out = out.replace(/\btweet:(T\d+)\b/gi, (full, ref: string) => {
+      const id = apply(ref);
+      return id != null ? mediaWikiTweetLinkFromId(id) : full;
+    });
+
+    out = out.replace(/\bt:(T\d+)\b/gi, (full, ref: string) => {
+      const id = apply(ref);
+      return id != null ? mediaWikiTweetLinkFromId(id) : full;
+    });
+  }
+
+  out = fixStrayAngleBracketOpenUrls(out);
+  out = normalizeBareTweetIdsAndUrlsToXStatusUrl(out);
   return out;
 }
 
@@ -153,30 +346,57 @@ export function embedTwimgBracketLinksAsImg(wikitext: string): string {
 
 /**
  * DB の拡張メタデータを活かしつつ、プロフィール等の重複を避けて AI に渡す本文を組み立てる。
- * - 同一 user_id（または表示名のみ）のアカウント情報は先頭に 1 回だけ
+ * - 同一 user_id（または表示名のみ）のアカウント情報は先頭に 1 回だけ（先頭列に a1/a2… の識別子）
+ * - ツイート行は aN のみでアカウントを指す（表示名は【acct】の行にのみ）
  * - 画像は参照番号 M1/M2… のみ（実 URL はプロンプトに含めない）
- * - 各ツイートに「画像: あり/なし」を明示
+ * - ツイート id は T1/T2…（本文順）。`tweetRefToId` で T→実 id、`expandTweetRefsInWikitext` で X のステータス URL へ展開
+ * - 各ツイートに「画像: あり/なし」を明示（verbose）
  * - `mediaRefToUrl` で M→URL を保持し、保存前に `expandMediaRefsInWikitext` で展開
  */
 async function yieldToEventLoop(): Promise<void> {
   await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
+const HEADER_COMPACT =
+  "【参考】a/T/Mは参照用識別子(実id・URLは含まない)。【tw】のa1等は【acct】の同一行。【tw】各行は aN (t:T1 …) 形式でTは本文順。同一acctは下1行のみ。付与順:各acct初出でp→h→各tw添付(静止画のみ)。出典は括弧内t:Tnまたは記事で|image=M3/{{MREF:3}}→保存時URL化。";
+
+const HEADER_VERBOSE =
+  "【参考ツイートの見方】各ツイート行先頭の a1 等は「アカウント一覧」の同一行と対応。同一アカウントのプロフィール・フォロワー数等は「アカウント一覧」に 1 回のみ。各ツイートは本文とメタ。添付画像・アイコン・ヘッダーは参照番号（M1 等）のみ示す（実 URL はこのプロンプトには含めない。トークン節約）。参照番号の付与順は (1) ツイートの並び順に現れる各アカウントの初出について、アイコン→ヘッダー、(2) その後にツイート 1 件目から順に、各ツイートの添付画像を枚数順（2 件目以降の同一アカウントはアイコン・ヘッダー用の番号を消費しない）。静止画のみ（動画・GIF は参照に含めない）。記事ではツイート id の出典を書く。**画像を閲覧可能に載せるには**、この Wiki では Infobox Person で `| image = M3` または `|image=M3`（番号は上の一覧と一致）と書くか、本文に `{{MREF:3}}`（M3 と同じ番号）と書く。Wiki 保存直前にサーバーがこれらを**実際の画像 URL**へ置換する。テンプレートが外部 URL の `image` に非対応なら、本文の `{{MREF:n}}` か外部リンク記法を使う。";
+
 export async function formatReferenceTweetsForPrompt(
   tweets: TweetHit[]
 ): Promise<TweetPromptParts> {
-  const seenAccount = new Set<string>();
+  const verbose = isTweetPromptVerbose();
   const accountLines: string[] = [];
   const mediaRef = createMediaRefCounter();
 
-  let accountPassIndex = 0;
+  const keyToAcct = new Map<string, string>();
+  const keyOrder: string[] = [];
+  let acctSeq = 0;
   for (const t of tweets) {
+    const k = accountKey(t);
+    if (!keyToAcct.has(k)) {
+      acctSeq++;
+      keyToAcct.set(k, `a${acctSeq}`);
+      keyOrder.push(k);
+    }
+  }
+  const firstTweetByKey = new Map<string, TweetHit>();
+  for (const t of tweets) {
+    const k = accountKey(t);
+    if (!firstTweetByKey.has(k)) firstTweetByKey.set(k, t);
+  }
+
+  const handleToAcct = buildHandleToAcctId(tweets, keyToAcct);
+
+  let accountPassIndex = 0;
+  for (const key of keyOrder) {
     accountPassIndex++;
     if (accountPassIndex > 1 && accountPassIndex % 500 === 0) {
       await yieldToEventLoop();
     }
-    const key = accountKey(t);
-    if (seenAccount.has(key)) continue;
+    const t = firstTweetByKey.get(key)!;
+    const acctId = keyToAcct.get(key)!;
     const hasProfile =
       (t.userDescription != null && String(t.userDescription).trim() !== "") ||
       t.userFollowersCount != null ||
@@ -188,89 +408,101 @@ export async function formatReferenceTweetsForPrompt(
       t.userProfileImageUrl != null ||
       t.userProfileBannerUrl != null;
 
-    if (!hasProfile && !t.authorId && !t.displayName) continue;
-    seenAccount.add(key);
+    if (!hasProfile && !t.authorId && !t.displayName) {
+      if (verbose) {
+        accountLines.push(`- ${acctId} | tid=${t.id}`);
+      } else {
+        accountLines.push(`- ${acctId} tid:${t.id}`);
+      }
+      continue;
+    }
 
     const iconRef = mediaRef.nextIfUrl(t.userProfileImageUrl);
     const bannerRef = mediaRef.nextIfUrl(t.userProfileBannerUrl);
 
-    const parts: string[] = [];
-    if (t.authorId?.trim()) parts.push(`user_id=${t.authorId.trim()}`);
-    if (t.displayName?.trim()) parts.push(`表示名=${t.displayName.trim()}`);
-    if (t.userDescription != null && String(t.userDescription).trim()) {
-      parts.push(`プロフィール=${normalizeWs(String(t.userDescription))}`);
-    }
-    const fl = num(t.userFollowersCount);
-    const fg = num(t.userFollowingCount);
-    const tc = num(t.userTweetCount);
-    if (fl != null) parts.push(`followers=${fl}`);
-    if (fg != null) parts.push(`following=${fg}`);
-    if (tc != null) parts.push(`ツイート数=${tc}`);
-    if (t.userLocation != null && String(t.userLocation).trim()) {
-      parts.push(`所在地=${normalizeWs(String(t.userLocation))}`);
-    }
-    const uca = formatPromptDateTime(
-      t.userCreatedAt != null ? String(t.userCreatedAt) : undefined
-    );
-    if (uca) {
-      parts.push(`アカウント作成=${uca}`);
-    }
-    if (t.userVerified != null && String(t.userVerified).trim() !== "") {
-      parts.push(`認証=${String(t.userVerified).trim()}`);
-    }
-    parts.push(`アイコン=${iconRef ?? "なし"}`);
-    parts.push(`ヘッダー=${bannerRef ?? "なし"}`);
+    if (verbose) {
+      const parts: string[] = [];
+      if (t.authorId?.trim()) parts.push(`user_id=${t.authorId.trim()}`);
+      if (t.displayName?.trim()) parts.push(`表示名=${t.displayName.trim()}`);
+      if (t.userDescription != null && String(t.userDescription).trim()) {
+        parts.push(`プロフィール=${normalizeWs(String(t.userDescription))}`);
+      }
+      const fl = num(t.userFollowersCount);
+      const fg = num(t.userFollowingCount);
+      const tc = num(t.userTweetCount);
+      if (fl != null) parts.push(`followers=${fl}`);
+      if (fg != null) parts.push(`following=${fg}`);
+      if (tc != null) parts.push(`ツイート数=${tc}`);
+      if (t.userLocation != null && String(t.userLocation).trim()) {
+        parts.push(`所在地=${normalizeWs(String(t.userLocation))}`);
+      }
+      const uca = formatPromptDateTime(
+        t.userCreatedAt != null ? String(t.userCreatedAt) : undefined
+      );
+      if (uca) {
+        parts.push(`アカウント作成=${uca}`);
+      }
+      if (t.userVerified != null && String(t.userVerified).trim() !== "") {
+        parts.push(`認証=${String(t.userVerified).trim()}`);
+      }
+      if (iconRef) parts.push(`アイコン=${iconRef}`);
+      if (bannerRef) parts.push(`ヘッダー=${bannerRef}`);
 
-    if (parts.length > 0) {
-      accountLines.push(`- ${parts.join(" | ")}`);
+      if (parts.length > 0) {
+        accountLines.push(`- ${acctId} | ${parts.join(" | ")}`);
+      }
+    } else {
+      const parts: string[] = [acctId];
+      if (t.authorId?.trim()) parts.push(`u:${t.authorId.trim()}`);
+      if (t.displayName?.trim()) parts.push(`n:${t.displayName.trim()}`);
+      if (t.userDescription != null && String(t.userDescription).trim()) {
+        parts.push(`b:${normalizeWs(String(t.userDescription))}`);
+      }
+      const fl = num(t.userFollowersCount);
+      const fg = num(t.userFollowingCount);
+      const tc = num(t.userTweetCount);
+      if (fl != null) parts.push(`f:${fl}`);
+      if (fg != null) parts.push(`g:${fg}`);
+      if (tc != null) parts.push(`s:${tc}`);
+      if (t.userLocation != null && String(t.userLocation).trim()) {
+        parts.push(`l:${normalizeWs(String(t.userLocation))}`);
+      }
+      const uca = formatPromptDateCompact(
+        t.userCreatedAt != null ? String(t.userCreatedAt) : undefined
+      );
+      if (uca) parts.push(`c:${uca}`);
+      if (t.userVerified != null && String(t.userVerified).trim() !== "") {
+        parts.push(`v:${String(t.userVerified).trim()}`);
+      }
+      if (iconRef) parts.push(`p:${iconRef}`);
+      if (bannerRef) parts.push(`h:${bannerRef}`);
+
+      accountLines.push(`- ${parts.join(" ")}`);
     }
   }
 
-  const header =
-    "【参考ツイートの見方】同一アカウントのプロフィール・フォロワー数等は「アカウント一覧」に 1 回のみ。各ツイートは本文とメタ。添付画像・アイコン・ヘッダーは参照番号（M1 等）のみ示す（実 URL はこのプロンプトには含めない。トークン節約）。参照番号の付与順は (1) ツイートの並び順に現れる各アカウントの初出について、アイコン→ヘッダー、(2) その後にツイート 1 件目から順に、各ツイートの添付画像を枚数順（2 件目以降の同一アカウントはアイコン・ヘッダー用の番号を消費しない）。静止画のみ（動画・GIF は参照に含めない）。記事ではツイート id の出典を書く。**画像を閲覧可能に載せるには**、この Wiki では Infobox Person で `| image = M3` または `|image=M3`（番号は上の一覧と一致）と書くか、本文に `{{MREF:3}}`（M3 と同じ番号）と書く。Wiki 保存直前にサーバーがこれらを**実際の画像 URL**へ置換する。テンプレートが外部 URL の `image` に非対応なら、本文の `{{MREF:n}}` か外部リンク記法を使う。";
+  const header = verbose ? HEADER_VERBOSE : HEADER_COMPACT;
 
   const accountBlock =
     accountLines.length > 0
       ? [
           "",
-          "【アカウント一覧（重複なし）】",
+          verbose ? "【アカウント一覧（重複なし）】" : "【acct】",
           ...accountLines,
           "",
         ].join("\n")
       : "";
 
   const tweetLines: string[] = [];
+  const tweetRefToId = new Map<string, string>();
   for (let i = 0; i < tweets.length; i++) {
     if (i > 0 && i % 500 === 0) {
       await yieldToEventLoop();
     }
     const t = tweets[i]!;
-    const label = t.displayName?.trim() ? ` ${t.displayName.trim()}` : "";
-    const meta: string[] = [];
-    const ca = formatPromptDateTime(
-      t.createdAt != null ? String(t.createdAt) : undefined
-    );
-    if (ca) {
-      meta.push(`時刻=${ca}`);
-    }
-    const r = num(t.replyCount);
-    const rt = num(t.rtCount);
-    const qt = num(t.qtCount);
-    const lk = num(t.likesCount);
-    const vw = num(t.viewCount);
-    const bm = num(t.bookmarkCount);
-    if (r != null) meta.push(`返信=${r}`);
-    if (rt != null) meta.push(`RT=${rt}`);
-    if (qt != null) meta.push(`引用RT=${qt}`);
-    if (lk != null) meta.push(`いいね=${lk}`);
-    if (vw != null) meta.push(`表示=${vw}`);
-    if (bm != null) meta.push(`ブクマ=${bm}`);
-    if (t.inReplyToScreenName != null && String(t.inReplyToScreenName).trim()) {
-      meta.push(`返信先@${String(t.inReplyToScreenName).trim()}`);
-    }
-    if (t.quotedTweetText != null && String(t.quotedTweetText).trim()) {
-      meta.push(`引用本文=${normalizeWs(String(t.quotedTweetText))}`);
-    }
+    const tRef = `T${i + 1}`;
+    tweetRefToId.set(tRef, t.id);
+    const acctId = keyToAcct.get(accountKey(t)) ?? "a?";
 
     const imgs = t.tweetImageUrls?.filter(Boolean) ?? [];
     const tweetRefs: string[] = [];
@@ -279,24 +511,97 @@ export async function formatReferenceTweetsForPrompt(
       if (ref) tweetRefs.push(ref);
     }
     const hasTweetPhoto = tweetRefs.length > 0;
-    meta.unshift(
-      hasTweetPhoto
-        ? `画像: あり（${tweetRefs.join(", ")}）`
-        : "画像: なし"
-    );
 
-    const metaStr = meta.length > 0 ? ` (${meta.join(", ")})` : "";
-    tweetLines.push(
-      `${i + 1}. [tweet:${t.id}]${label}${metaStr}\n   ${t.text}`
-    );
+    if (verbose) {
+      const meta: string[] = [`t:${tRef}`];
+      meta.push(
+        hasTweetPhoto
+          ? `画像: あり（${tweetRefs.join(", ")}）`
+          : "画像: なし"
+      );
+      const ca = formatPromptDateTime(
+        t.createdAt != null ? String(t.createdAt) : undefined
+      );
+      if (ca) {
+        meta.push(`時刻=${ca}`);
+      }
+      const r = num(t.replyCount);
+      const rt = num(t.rtCount);
+      const qt = num(t.qtCount);
+      const lk = num(t.likesCount);
+      const vw = num(t.viewCount);
+      const bm = num(t.bookmarkCount);
+      if (r != null) meta.push(`返信=${r}`);
+      if (rt != null) meta.push(`RT=${rt}`);
+      if (qt != null) meta.push(`引用RT=${qt}`);
+      if (lk != null) meta.push(`いいね=${lk}`);
+      if (vw != null) meta.push(`表示=${vw}`);
+      if (bm != null) meta.push(`ブクマ=${bm}`);
+      if (t.inReplyToScreenName != null && String(t.inReplyToScreenName).trim()) {
+        const rpAcct = resolveReplyToAcctId(
+          t.inReplyToScreenName,
+          handleToAcct,
+          tweets,
+          keyToAcct
+        );
+        meta.push(
+          rpAcct
+            ? `返信先=${rpAcct}`
+            : `返信先@${String(t.inReplyToScreenName).trim()}`
+        );
+      }
+      if (t.quotedTweetText != null && String(t.quotedTweetText).trim()) {
+        meta.push(`引用本文=${normalizeWs(String(t.quotedTweetText))}`);
+      }
+
+      const metaStr = ` (${meta.join(", ")})`;
+      tweetLines.push(
+        `${i + 1}. ${acctId}${metaStr}\n   ${t.text}`
+      );
+    } else {
+      const ca = formatPromptDateTimeCompact(
+        t.createdAt != null ? String(t.createdAt) : undefined
+      );
+      const eng = formatEngagementCompact(t);
+      const bits: string[] = [`t:${tRef}`];
+      if (ca) bits.push(ca);
+      if (eng) bits.push(eng);
+      if (hasTweetPhoto) {
+        bits.push(`i:${tweetRefs.join(" ")}`);
+      }
+      if (t.inReplyToScreenName != null && String(t.inReplyToScreenName).trim()) {
+        const rpAcct = resolveReplyToAcctId(
+          t.inReplyToScreenName,
+          handleToAcct,
+          tweets,
+          keyToAcct
+        );
+        bits.push(
+          rpAcct
+            ? `r:${rpAcct}`
+            : `r:@${normalizeWs(String(t.inReplyToScreenName).trim())}`
+        );
+      }
+      if (t.quotedTweetText != null && String(t.quotedTweetText).trim()) {
+        bits.push(`q:${normalizeWs(String(t.quotedTweetText))}`);
+      }
+      const metaStr = ` (${bits.join(" ")})`;
+      tweetLines.push(`${i + 1}. ${acctId}${metaStr}\n   ${t.text}`);
+    }
   }
+
+  const tweetSectionTitle = verbose ? "【ツイート】" : "【tw】";
 
   const prompt = [
     header,
     accountBlock,
-    "【ツイート】",
+    tweetSectionTitle,
     tweetLines.join("\n\n"),
   ].join("\n");
 
-  return { prompt, mediaRefToUrl: mediaRef.getRefToUrl() };
+  return {
+    prompt,
+    mediaRefToUrl: mediaRef.getRefToUrl(),
+    tweetRefToId,
+  };
 }

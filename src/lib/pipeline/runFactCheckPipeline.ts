@@ -3,6 +3,7 @@ import {
   type AiStreamOptions,
 } from "@/lib/ai";
 import { formatTokenUsageForProgressLine } from "@/lib/openaiUsage";
+import { getComposeTweetMax } from "@/lib/tweetLimits";
 import type {
   FactCheckReport,
   FactCheckRunLog,
@@ -49,11 +50,25 @@ export async function runFactCheckPipeline(
                 onReasoningStreamDelta: (d: string) =>
                   onAiStream("suggest_queries_reasoning", d),
               }
-            : {}),
+            : onProgress
+              ? { onStreamDelta: () => {} }
+              : {}),
           onTokenUsage: (u) =>
             onProgress?.(
               formatTokenUsageForProgressLine(u, "検索クエリ生成")
             ),
+          ...(onProgress
+            ? {
+                onAwaitingHttpResponse: () =>
+                  onProgress(
+                    "検索クエリ用 AI: リクエスト送信中（応答ヘッダ待ち。長いと数分）…"
+                  ),
+                onHttpResponseReady: () =>
+                  onProgress(
+                    "検索クエリ用 AI: 応答ストリーム受信中…"
+                  ),
+              }
+            : {}),
         }
       : undefined;
 
@@ -73,14 +88,18 @@ export async function runFactCheckPipeline(
     wikiErr,
     tweets,
     wikiHitsForAi,
+    yahooWebSearchHits,
+    yahooWebSearchErr,
     yahooHits,
     dbHits,
     cap,
     current,
   } = g;
 
+  const composeTweetMax = getComposeTweetMax();
+  const tweetsForAi = tweets.slice(0, composeTweetMax);
   onProgress?.(
-    `参照: ツイート ${tweets.length} 件（上限 ${cap}）、Wiki 関連ページ ${wikiHitsForAi.length} 件。AI がファクトチェックを実行しています（下にストリーミング表示）…`
+    `参照: ツイート ${tweets.length} 件（上限 ${cap}）、うちファクトチェック AI には先頭 ${tweetsForAi.length} 件まで（HIKAMER_COMPOSE_TWEET_MAX=${composeTweetMax}）${tweets.length > composeTweetMax ? `。以降 ${tweets.length - composeTweetMax} 件は含めません` : ""}。Wiki 関連ページ ${wikiHitsForAi.length} 件。Yahoo!ウェブ検索 ${yahooWebSearchHits.length} 件${yahooWebSearchErr ? "（一部失敗）" : ""}。AI がファクトチェックを実行しています（下にストリーミング表示）…`
   );
 
   try {
@@ -89,8 +108,9 @@ export async function runFactCheckPipeline(
         wikiTitle: proposal.wikiTitle,
         instruction: proposal.instruction,
         currentWikitext: current.wikitext,
-        tweets,
+        tweets: tweetsForAi,
         wikiSearchHits: wikiHitsForAi,
+        yahooWebSearchHits,
         focusWikitext: options.focusWikitext?.trim() || undefined,
       },
       onAiStream || onProgress
@@ -101,11 +121,25 @@ export async function runFactCheckPipeline(
                   onReasoningStreamDelta: (d: string) =>
                     onAiStream("fact_check_reasoning", d),
                 }
-              : {}),
+              : onProgress
+                ? { onStreamDelta: () => {} }
+                : {}),
             onTokenUsage: (u) =>
               onProgress?.(
                 formatTokenUsageForProgressLine(u, "ファクトチェック")
               ),
+            ...(onProgress
+              ? {
+                  onAwaitingHttpResponse: () =>
+                    onProgress(
+                      "ファクトチェック AI: リクエスト送信中（応答ヘッダ待ち）…"
+                    ),
+                  onHttpResponseReady: () =>
+                    onProgress(
+                      "ファクトチェック AI: 応答ストリーム受信中…"
+                    ),
+                }
+              : {}),
           }
         : undefined
     );
@@ -124,6 +158,8 @@ export async function runFactCheckPipeline(
       dbError: dbErr,
       wikiSearchHitCount: wikiHitsForAi.length,
       wikiSearchError: wikiErr,
+      yahooWebSearchHitCount: yahooWebSearchHits.length,
+      yahooWebSearchError: yahooWebSearchErr,
     };
 
     return {

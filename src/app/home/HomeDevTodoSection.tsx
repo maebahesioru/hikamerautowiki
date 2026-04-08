@@ -37,9 +37,6 @@ export function HomeDevTodoSection() {
                 定期的に録音が公開されているものを掘り当て、ローカル Whisper で文字起こしして自鯖 DB などに保存する、といったルートならギリ現実的かもしれない、など。
               </span>
             </li>
-            <li>
-              Web 検索で他サイトや YouTube やニコニコの情報を扱えるようにする
-            </li>
           </ul>
         </section>
   );

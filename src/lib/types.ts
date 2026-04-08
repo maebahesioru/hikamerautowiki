@@ -54,6 +54,9 @@ export type PipelineRunLog = {
   /** list=search で集めた関連ページ（編集対象ページ除く、ユニーク件数） */
   wikiSearchHitCount?: number;
   wikiSearchError?: string;
+  /** Yahoo!ウェブ検索（HTML 解析）で集めたヒット数 */
+  yahooWebSearchHitCount?: number;
+  yahooWebSearchError?: string;
   aiStrategy: "full" | "patch" | "refuse";
   aiPatchCount: number;
   /** strategy が refuse のとき AI が説明した見送り理由（notesForHuman） */
@@ -90,4 +93,6 @@ export type FactCheckRunLog = {
   dbError?: string;
   wikiSearchHitCount?: number;
   wikiSearchError?: string;
+  yahooWebSearchHitCount?: number;
+  yahooWebSearchError?: string;
 };

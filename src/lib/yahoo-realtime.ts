@@ -16,6 +16,8 @@ export type TweetHit = {
   text: string;
   /** 表示名（Yahoo: `name`、DB: `user_name`） */
   displayName?: string;
+  /** X の screen_name（@ハンドル）。プロンプトで返信先を aN に解決するのに使う */
+  authorScreenName?: string;
   authorId?: string;
   /** ISO 文字列または DB の生値 */
   createdAt?: string;
@@ -158,6 +160,7 @@ export function mergeTweetHitFields(a: TweetHit, b: TweetHit): TweetHit {
     userProfileBannerUrl: a.userProfileBannerUrl ?? b.userProfileBannerUrl,
     text: a.text || b.text,
     displayName: a.displayName ?? b.displayName,
+    authorScreenName: a.authorScreenName ?? b.authorScreenName,
     authorId: a.authorId ?? b.authorId,
     createdAt: a.createdAt ?? b.createdAt,
     replyCount: a.replyCount ?? b.replyCount,
@@ -183,6 +186,7 @@ function mapEntries(entries: YahooEntry[]): TweetHit[] {
   return entries
     .filter((e): e is YahooEntry & { id: string } => typeof e.id === "string")
     .map((e) => {
+      const ex = e as Record<string, unknown>;
       const hit: TweetHit = {
         id: e.id,
         text: entryText(e),
@@ -190,6 +194,12 @@ function mapEntries(entries: YahooEntry[]): TweetHit[] {
           typeof e.name === "string" && e.name.trim() ? e.name.trim() : undefined,
         authorId: str(e.userId),
       };
+      const asn =
+        str(ex.screenName) ??
+        str(ex.screen_name) ??
+        str(ex.userScreenName) ??
+        str(ex.userName);
+      if (asn) hit.authorScreenName = asn;
       const ca = str(e.createdAt);
       if (ca) hit.createdAt = ca;
       const rc = num(e.replyCount);

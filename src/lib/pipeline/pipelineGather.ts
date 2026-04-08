@@ -5,6 +5,7 @@ import {
   type AiStreamOptions,
 } from "@/lib/ai";
 import {
+  enrichWikiSearchHitsWithWikitext,
   fetchWikiWikitextPublic,
   mergeWikiSearchHitsByTitle,
   searchWikiPages,
@@ -12,7 +13,7 @@ import {
   type WikiRevision,
   type WikiSearchHit,
 } from "@/lib/mediawiki";
-import { getTweetTotalLimit } from "@/lib/tweetLimits";
+import { getQueryBootstrapTweetMax, getTweetTotalLimit } from "@/lib/tweetLimits";
 import { mergeTweetHitsById, orderTweetHitsDbPriorityRandom } from "@/lib/tweetsDb";
 import {
   stripSinceUntilFromYahooQuery,
@@ -29,6 +30,8 @@ import {
   isFxtwitterMediaEnrichEnabled,
   tweetHitHasProfileAndTweetImages,
 } from "@/lib/fxtwitter";
+import { fetchYahooWebSearchForQueries } from "@/lib/yahooWebSearch";
+import type { YahooWebSearchHit } from "@/lib/yahooWebSearch";
 import { mapPool } from "@/lib/concurrency";
 import type { PipelineRunLog, Proposal } from "@/lib/types";
 import {
@@ -61,6 +64,9 @@ export type GatheredProposalEvidence = {
   yahooHits: TweetHit[];
   dbHits: TweetHit[];
   cap: number;
+  /** Yahoo!ウェブ検索（ツイート検索クエリから。YouTube・ニコニコ等の SERP に含まれる場合あり） */
+  yahooWebSearchHits: YahooWebSearchHit[];
+  yahooWebSearchErr?: string;
 };
 
 /**
@@ -111,7 +117,7 @@ export async function fetchBootstrapTweetHitsForProposal(
     }
     if (merged.length > 0) {
       onProgress?.(
-        `（検索クエリ用の参考ツイート: ${merged.length} 件。FxTwitter 補完は検索ワード段階では行いません）`
+        `（検索クエリ用の参考ツイート: ${merged.length} 件取得。検索クエリ AI には先頭最大 ${getQueryBootstrapTweetMax()} 件まで（HIKAMER_QUERY_BOOTSTRAP_TWEET_MAX）。FxTwitter 補完は検索ワード段階では行いません）`
       );
     }
     return merged.length > 0 ? merged : undefined;
@@ -314,7 +320,21 @@ export async function gatherProposalEvidence(
   const wikiErr =
     wikiErrParts.length > 0 ? wikiErrParts.join("; ") : undefined;
 
-  const wikiHitsForAi = wikiHitsMerged.slice(0, WIKI_CONTEXT_MAX_PAGES);
+  const webSearchPromise = fetchYahooWebSearchForQueries(searchable, {
+    onProgress,
+  });
+
+  let wikiHitsForAi = wikiHitsMerged.slice(0, WIKI_CONTEXT_MAX_PAGES);
+  if (wikiHitsForAi.length > 0) {
+    onProgress?.(
+      `Wiki 内検索の関連 ${wikiHitsForAi.length} ページの本文（wikitext）を取得しています…`
+    );
+    wikiHitsForAi = await enrichWikiSearchHitsWithWikitext(apiUrl, wikiHitsForAi, {
+      concurrency: getSearchConcurrency(),
+    });
+  }
+
+  const yahooWebBundle = await webSearchPromise;
 
   const cap = getTweetTotalLimit();
   const merged = mergeTweetHitsById(dbHits, yahooHits);
@@ -351,5 +371,7 @@ export async function gatherProposalEvidence(
     yahooHits,
     dbHits,
     cap,
+    yahooWebSearchHits: yahooWebBundle.hits,
+    yahooWebSearchErr: yahooWebBundle.error,
   };
 }

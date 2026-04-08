@@ -19,7 +19,7 @@ const mockLog: PipelineRunLog = {
   yahooCount: 0,
   dbCount: 0,
   mergedTweetCount: 0,
-  cap: 10000,
+  cap: 6000,
   aiStrategy: "full",
   aiPatchCount: 0,
 };

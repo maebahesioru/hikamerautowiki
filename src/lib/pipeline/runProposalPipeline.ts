@@ -11,6 +11,7 @@ import {
   type DecodedInlineAttachment,
   type PreUploadedWikiFile,
 } from "@/lib/inlineAttachmentImages";
+import { getComposeTweetMax } from "@/lib/tweetLimits";
 import { uploadPbsTwimgUrlsInWikitext } from "@/lib/wikiTweetImageUpload";
 import type { PipelineRunLog, Proposal } from "@/lib/types";
 import { loadWikitempForPrompt } from "@/lib/wikitemp";
@@ -58,11 +59,25 @@ export async function runProposalPipeline(
                 onReasoningStreamDelta: (d: string) =>
                   onAiStream("suggest_queries_reasoning", d),
               }
-            : {}),
+            : onProgress
+              ? { onStreamDelta: () => {} }
+              : {}),
           onTokenUsage: (u) =>
             onProgress?.(
               formatTokenUsageForProgressLine(u, "検索クエリ生成")
             ),
+          ...(onProgress
+            ? {
+                onAwaitingHttpResponse: () =>
+                  onProgress(
+                    "検索クエリ用 AI: リクエスト送信中（応答ヘッダ待ち。長いと数分）…"
+                  ),
+                onHttpResponseReady: () =>
+                  onProgress(
+                    "検索クエリ用 AI: 応答ストリーム受信中…"
+                  ),
+              }
+            : {}),
         }
       : undefined;
 
@@ -94,6 +109,8 @@ export async function runProposalPipeline(
     dbErr,
     wikiErr,
     wikiHitsForAi,
+    yahooWebSearchHits,
+    yahooWebSearchErr,
     yahooHits,
     dbHits,
     cap,
@@ -154,8 +171,10 @@ export async function runProposalPipeline(
     }
   }
 
+  const composeTweetMax = getComposeTweetMax();
+  const tweetsForCompose = tweets.slice(0, composeTweetMax);
   onProgress?.(
-    `参照: ツイート ${tweets.length} 件（上限 ${cap}）、Wiki 関連ページ ${wikiHitsForAi.length} 件。AI が wikitext を編集しています（下にストリーミング表示）…`
+    `参照: ツイート ${tweets.length} 件（上限 ${cap}）、うち wikitext 編集 AI には先頭 ${tweetsForCompose.length} 件まで（HIKAMER_COMPOSE_TWEET_MAX=${composeTweetMax}。長い参照形式のため件数を絞ると安定）${tweets.length > composeTweetMax ? `。以降 ${tweets.length - composeTweetMax} 件は参照に含めません` : ""}。Wiki 関連ページ ${wikiHitsForAi.length} 件。Yahoo!ウェブ検索 ${yahooWebSearchHits.length} 件${yahooWebSearchErr ? "（一部失敗）" : ""}。AI が wikitext を編集しています（下にストリーミング表示）…`
   );
   let composed: ComposeResult;
   try {
@@ -164,8 +183,9 @@ export async function runProposalPipeline(
         wikiTitle: proposal.wikiTitle,
         instruction: proposal.instruction,
         currentWikitext: current.wikitext,
-        tweets,
+        tweets: tweetsForCompose,
         wikiSearchHits: wikiHitsForAi,
+        yahooWebSearchHits,
         ...(wikitempStyleExample
           ? { wikitempStyleExample }
           : {}),
@@ -183,7 +203,9 @@ export async function runProposalPipeline(
                   onReasoningStreamDelta: (d: string) =>
                     onAiStream("compose_wikitext_reasoning", d),
                 }
-              : {}),
+              : onProgress
+                ? { onStreamDelta: () => {} }
+                : {}),
             onTokenUsage: (u) =>
               onProgress?.(
                 formatTokenUsageForProgressLine(u, "wikitext 編集")
@@ -210,6 +232,8 @@ export async function runProposalPipeline(
     dbError: dbErr,
     wikiSearchHitCount: wikiHitsForAi.length,
     wikiSearchError: wikiErr,
+    yahooWebSearchHitCount: yahooWebSearchHits.length,
+    yahooWebSearchError: yahooWebSearchErr,
     aiStrategy: composed.strategyUsed,
     aiPatchCount: composed.patchCount,
     ...(composed.strategyUsed === "refuse"
@@ -240,7 +264,8 @@ export async function runProposalPipeline(
       `ツイート検索の期間: ${tweetSearchRangeLabel ?? "（指定なし）"}（${tweetSearchRangeSource === "manual" ? "手動（proposal）" : "検索語 since:/until:"}）`,
       `DB: ${dbHits.length}件${dbErr ? ` (失敗: ${dbErr})` : ""}`,
       `Wiki 内検索: ${wikiHitsForAi.length}ページ（ユニーク・AI 参照用）${wikiErr ? ` (一部失敗: ${wikiErr})` : ""}`,
-      `Yahoo: ${yahooHits.length}件${yahooErr ? ` (失敗: ${yahooErr})` : ""}`,
+      `Yahoo!ウェブ検索: ${yahooWebSearchHits.length}件${yahooWebSearchErr ? ` (一部失敗: ${yahooWebSearchErr})` : ""}`,
+      `Yahoo リアルタイム: ${yahooHits.length}件${yahooErr ? ` (失敗: ${yahooErr})` : ""}`,
       `マージ後ツイート（合計上限 ${cap} 件まで・DB 優先のうえ群内ランダム順）: ${tweets.length}件`,
       "",
       humanNotesBlock,

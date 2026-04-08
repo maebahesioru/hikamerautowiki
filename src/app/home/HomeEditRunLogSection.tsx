@@ -112,6 +112,21 @@ export function HomeEditRunLogSection({ toolMode, lastRunLog }: Props) {
               </div>
               <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
                 <dt className="shrink-0 font-medium text-zinc-600 dark:text-zinc-400">
+                  Yahoo!ウェブ検索
+                </dt>
+                <dd className="text-zinc-900 dark:text-zinc-100">
+                  {lastRunLog.yahooWebSearchHitCount != null
+                    ? `${lastRunLog.yahooWebSearchHitCount} 件（SERP 抜粋）`
+                    : "—"}
+                  {lastRunLog.yahooWebSearchError ? (
+                    <span className="ml-2 text-amber-800 dark:text-amber-200">
+                      （取得エラー: {lastRunLog.yahooWebSearchError}）
+                    </span>
+                  ) : null}
+                </dd>
+              </div>
+              <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
+                <dt className="shrink-0 font-medium text-zinc-600 dark:text-zinc-400">
                   Yahoo リアルタイム
                 </dt>
                 <dd className="text-zinc-900 dark:text-zinc-100">

@@ -1,6 +1,10 @@
 import type { TweetHit } from "@/lib/yahoo-realtime";
 
-export type WikiSearchHit = { title: string; snippet?: string };
+export type WikiSearchHit = {
+  title: string;
+  snippet?: string;
+  wikitext?: string;
+};
 
 /** 成功直後の X 共有用（ページ名を保持） */
 export type ShareSnapshot =

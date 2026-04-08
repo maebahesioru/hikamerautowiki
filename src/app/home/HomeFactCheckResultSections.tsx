@@ -113,6 +113,31 @@ export function HomeFactCheckResultSections({
                     {factCheckLog.mergedTweetCount} 件（上限 {factCheckLog.cap} 件）
                   </dd>
                 </div>
+                <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
+                  <dt className="shrink-0 font-medium text-zinc-600 dark:text-zinc-400">
+                    Wiki 内検索（関連ページ）
+                  </dt>
+                  <dd className="text-zinc-900 dark:text-zinc-100">
+                    {factCheckLog.wikiSearchHitCount != null
+                      ? `${factCheckLog.wikiSearchHitCount} ページ`
+                      : "—"}
+                  </dd>
+                </div>
+                <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
+                  <dt className="shrink-0 font-medium text-zinc-600 dark:text-zinc-400">
+                    Yahoo!ウェブ検索
+                  </dt>
+                  <dd className="text-zinc-900 dark:text-zinc-100">
+                    {factCheckLog.yahooWebSearchHitCount != null
+                      ? `${factCheckLog.yahooWebSearchHitCount} 件`
+                      : "—"}
+                    {factCheckLog.yahooWebSearchError ? (
+                      <span className="ml-2 text-amber-800 dark:text-amber-200">
+                        （取得エラー: {factCheckLog.yahooWebSearchError}）
+                      </span>
+                    ) : null}
+                  </dd>
+                </div>
               </dl>
             </section>
           ) : null}
