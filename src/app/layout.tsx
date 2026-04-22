@@ -98,7 +98,7 @@ export default function RootLayout({
       lang="ja"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}        <script src="https://hikakinmaniacoin.hikamer.f5.si/ad.js" async></script>
+      <body className="min-h-full flex flex-col">{children}        <script src="https://hikakinmaniacoin.hikamer.f5.si/ad.js" data-user-id="cmo8lk1kj0000aggyuhzgv5vk" async></script>
       </body>
     </html>
   );
