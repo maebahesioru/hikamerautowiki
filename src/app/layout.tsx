@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 const siteDescription =
   "ヒカマーwiki の記事を、指示と Yahoo リアルタイム検索・DB のツイートを踏まえて AI が wikitext を生成し、MediaWiki に反映するツールです。";
 
+// rebuild trigger
 export const metadata: Metadata = {
   metadataBase: new URL("https://hikamerautowiki.hikamer.f5.si"),
   title: {
