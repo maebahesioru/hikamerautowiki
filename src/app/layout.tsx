@@ -15,21 +15,8 @@ const geistMono = Geist_Mono({
 const siteDescription =
   "ヒカマーwiki の記事を、指示と Yahoo リアルタイム検索・DB のツイートを踏まえて AI が wikitext を生成し、MediaWiki に反映するツールです。";
 
-/** OG / canonical 用。本番では `NEXT_PUBLIC_SITE_URL` を必ず設定すること。 */
-function metadataBaseUrl(): URL {
-  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (raw) {
-    try {
-      return new URL(raw.endsWith("/") ? raw.slice(0, -1) : raw);
-    } catch {
-      /* fall through */
-    }
-  }
-  return new URL("http://localhost:3000");
-}
-
 export const metadata: Metadata = {
-  metadataBase: metadataBaseUrl(),
+  metadataBase: new URL("https://hikamerautowiki.hikamer.f5.si"),
   title: {
     default: "ヒカマーwiki 自動編集アシスタント",
     template: "%s | ヒカマーwiki 自動編集",
@@ -60,11 +47,13 @@ export const metadata: Metadata = {
     siteName: "ヒカマーwiki 自動編集",
     title: "ヒカマーwiki 自動編集アシスタント",
     description: siteDescription,
+    images: ["/opengraph-image.png"],
   },
   twitter: {
     card: "summary_large_image",
     title: "ヒカマーwiki 自動編集アシスタント",
     description: siteDescription,
+    images: ["/opengraph-image.png"],
   },
   robots: {
     index: true,
