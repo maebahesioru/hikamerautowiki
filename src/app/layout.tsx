@@ -64,6 +64,7 @@ export const metadata: Metadata = {
       follow: true,
     },
   },
+  icons: { icon: "/icon" },
   alternates: {
     canonical: "/",
   },
