@@ -225,31 +225,14 @@ function messageForEmptyCompletion(
 }
 
 export const OPENAI_MODELS = [
-  "gemini-flash-latest",
-  "gemini-3-flash-preview",
-  "gemini-2.5-pro",
-  "gemini-flash-lite-latest",
-  "gemini-3.1-flash-lite-preview",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
-  "gemini-2.0-flash-lite",
+  "AnthropicClaude47Opus",
 ] as const;
 
 /**
  * MediaWiki 記事（wikitext）生成。先頭は 3.1 Pro → flash-latest → 3 flash → 2.5 pro → 3.1 flash lite、以降は軽量 flash 系へフォールバック。
  */
 export const WIKI_COMPOSE_MODELS = [
-  "gemini-3.1-pro-preview",
-  "gemini-flash-latest",
-  "gemini-3-flash-preview",
-  "gemini-2.5-pro",
-  "gemini-3.1-flash-lite-preview",
-  "gemini-flash-lite-latest",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
-  "gemini-2.0-flash-lite",
+  "AnthropicClaude47Opus",
 ] as const;
 
 /** 同一モデルでのリトライ後も解決しなければ次モデルへ */
