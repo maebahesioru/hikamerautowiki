@@ -779,3 +779,4 @@ export async function chatCompletionStream(
     new Error("AI応答に失敗しました。しばらく待ってから再試行してください。")
   );
 }
+// rebuild trigger 1779409237
