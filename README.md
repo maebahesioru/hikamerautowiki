@@ -86,3 +86,4 @@ pnpm start
 ## ライセンス
 
 [MIT License](LICENSE)（著作表示と同梱条件あり）。`package.json` の `license` フィールドとも一致しています。
+
