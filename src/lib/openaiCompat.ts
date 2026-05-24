@@ -225,14 +225,14 @@ function messageForEmptyCompletion(
 }
 
 export const OPENAI_MODELS = [
-  "AnthropicClaude47Opus",
+  "GeminiPro31Preview",
 ] as const;
 
 /**
  * MediaWiki 記事（wikitext）生成。先頭は 3.1 Pro → flash-latest → 3 flash → 2.5 pro → 3.1 flash lite、以降は軽量 flash 系へフォールバック。
  */
 export const WIKI_COMPOSE_MODELS = [
-  "AnthropicClaude47Opus",
+  "GeminiPro31Preview",
 ] as const;
 
 /** 同一モデルでのリトライ後も解決しなければ次モデルへ */
