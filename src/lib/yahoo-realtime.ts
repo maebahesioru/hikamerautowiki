@@ -75,7 +75,19 @@ type YahooPaginationResponse = {
   };
 };
 
-const API = "https://search.yahoo.co.jp/realtime/api/v1/pagination";
+const YAHOO_DIRECT = "https://search.yahoo.co.jp/realtime/api/v1/pagination";
+const YAHOO_PROXY = process.env.YAHOO_PROXY?.replace(/\/$/, "");
+
+async function yahooFetchWithFallback(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetchWithRetry(url, init);
+  } catch {
+    if (YAHOO_PROXY && url.startsWith(YAHOO_DIRECT)) {
+      return await fetchWithRetry(url.replace(YAHOO_DIRECT, `${YAHOO_PROXY}/pagination`), init);
+    }
+    throw new Error(humanizeNetworkError("yahoo"));
+  }
+}
 
 /** Yahoo 1 リクエストあたりの最大件数（API仕様） */
 const PER_PAGE = 40;
@@ -251,7 +263,7 @@ async function fetchEntryPage(
   if (time?.untilSec != null) params.set("until", String(time.untilSec));
   let r: Response;
   try {
-    r = await fetchWithRetry(`${API}?${params}`, { headers: headers() });
+    r = await yahooFetchWithFallback(`${YAHOO_DIRECT}?${params}`, { headers: headers() });
   } catch {
     throw new Error(humanizeNetworkError("yahoo"));
   }
