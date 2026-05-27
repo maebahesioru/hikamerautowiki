@@ -15,7 +15,19 @@ export type YahooWebSearchHit = {
   snippet: string;
 };
 
-const DEFAULT_UA =
+const YAHOO_WEB_DIRECT = "https://search.yahoo.co.jp/search";
+const YAHOO_PROXY_BASE = process.env.YAHOO_PROXY?.replace(/\/$/, "");
+
+async function yahooWebFetch(url: string, init: RequestInit, timeoutMs?: number): Promise<Response> {
+  try {
+    return await fetchWithRetry(url, init, { timeoutMs });
+  } catch {
+    if (YAHOO_PROXY_BASE && url.startsWith(YAHOO_WEB_DIRECT)) {
+      return await fetchWithRetry(url.replace(YAHOO_WEB_DIRECT, `${YAHOO_PROXY_BASE}/search`), init, { timeoutMs });
+    }
+    throw new Error(humanizeNetworkError("yahoo"));
+  }
+}
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 function headers(): Record<string, string> {
@@ -106,10 +118,10 @@ export async function searchYahooWeb(
   u.searchParams.set("ei", "UTF-8");
   let r: Response;
   try {
-    r = await fetchWithRetry(
+    r = await yahooWebFetch(
       u.toString(),
       { headers: headers() },
-      { timeoutMs: opts?.timeoutMs ?? 28_000 }
+      opts?.timeoutMs ?? 28_000
     );
   } catch {
     throw new Error(humanizeNetworkError("yahoo"));
