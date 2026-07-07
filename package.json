@@ -27,12 +27,7 @@
     "sharp": "^0.34.5",
     "zod": "^4.3.6"
   },
-  "pnpm": {
-    "overrides": {
-      "sharp": "0.34.5"
-    },
-    "ignoredBuiltDependencies": ["sharp", "unrs-resolver"]
-  },
+
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
